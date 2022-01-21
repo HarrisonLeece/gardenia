@@ -1,6 +1,5 @@
 #include <iostream>
 #include <filesystem>
-#include <experimental/filesystem>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -8,20 +7,17 @@
 #include <algorithm>    // std::sort
 #include <thread>
 #include "thread_pool.hpp"
-#include <opencv2/opencv.hpp>
-#include <opencv2/core.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/highgui.hpp>
 #include "vizModule.hpp"
 #include <exception>
+#include "shiba_image.hpp"
 
-//stb_image read and write inclusion and definitions
 
 
 //for creating directories on disk
 namespace fs = std::filesystem; //https://stackoverflow.com/questions/50960492/creating-folders-in-c/56262869
 using namespace std;
-using namespace cv;
+
+#define IS_TRUE(x) { if (!(x)) std::cout << __FUNCTION__ << " failed on line " << __LINE__ << std::endl; }
 
 class vCanvas {
   public:
@@ -62,7 +58,7 @@ class vCanvas {
 
     void setThreads(int numThreads); // Can be set with canvas.threads  the number of threads aren't utilized until render time
     void renderCanvas();
-    //oid renderCanvas_1T();
+    //void renderCanvas_1T();
 
   private:
     vector<vizModule> sortByDepth(); //Sort vizModules so that the deepest one (most bottom) is first
@@ -262,33 +258,12 @@ vector<int> computeBounds(vizModule module, int bgWidth, int bgHeight)  //Should
   //The +y also becomes 'down', + x stays 'right'
 
   //This is simple once understood, just
-  int y = (-1*module.y) + bgHeight; //Add the bgHeight to y
-  int x = module.x;
+  int y = (-1*module.ul_y) + bgHeight; //Add the bgHeight to y
+  int x = module.ul_x;
 
   //out always has the following structure
   //0:vStart, 1: vEnd, 2: hStart, 3:hEnd
   vector<int> out(4,0); //initialize with length 4, data = 0 so we can replace by index
-
-  //Transform the point of reference to the upper left corner of the module
-  if (module.anchor == 0) //the reference location for x,y position is the center
-  {
-    y = y-module.centerY;
-    x = x-module.centerX;
-
-  } else if (module.anchor == 1)
-  {
-    //Good to go!
-  } else if (module.anchor == 2)
-  {
-    y = y - module.sizey; // might have to switch with 1...
-  } else if (module.anchor == 3) // bottom right conrner
-  {
-    x = x - module.sizex;
-    y = y - module.sizey;
-  } else if (module.anchor == 4) //module.anchor == 4 -- upper right corner
-  {
-    x = x - module.sizex;
-  }
 
   //Index start and termination selection
   if (x<0) //horizontal start index control
@@ -337,12 +312,11 @@ string type2str(int type) {
 
 //This function cannot be a class member function
 //Therefore pass a million arguments to it.  Optional last arg , synced_stream output
-void superimpose(int frameNumber, vector<vizModule> vizModules, Mat bck, int frameRate)
+void superimpose(int frameNumber, vector<vizModule> vizModules, Mat bckg, int frameRate)
 {
   try {
-    Mat bckg = bck.clone();
-    vector<vizModule> renderStack; //the set of ordered vizModules sent to the render pipeline
 
+    vector<vizModule> renderStack; //the set of ordered vizModules sent to the render pipeline
     //Control which vizModules enter the render stack for this frame
     for (int i = 0; i < vizModules.size(); i++) {
       if (vizModules[i].isActive(frameRate, frameNumber)) //if vizModule is active at this frame. Frame rate is an instance variable, frame is from this for loop
@@ -351,6 +325,7 @@ void superimpose(int frameNumber, vector<vizModule> vizModules, Mat bck, int fra
       }
     } // After this for loop, all active vizModules are in the renderStack, in depth order (deepest first)
 
+    //cout << "made it to location 1!" << endl;
 
     //The canvas itself is used as avirtual background of user set (default black) colored pixels
     for (int index=0; index < renderStack.size(); index++)
@@ -368,17 +343,29 @@ void superimpose(int frameNumber, vector<vizModule> vizModules, Mat bck, int fra
         adjFrameNumber = (frameNumber)%filesInDir;
       }
 
-      //Mat * fg = new Mat(imread(renderStack[index].path + "output" + to_string(adjFrameNumber) + "." + renderStack[index].dataType, IMREAD_UNCHANGED));
-      Mat fg = imread(renderStack[index].path + "output" + to_string(adjFrameNumber) + "." + renderStack[index].dataType, IMREAD_UNCHANGED);
+      //cout << "made it to location 2!" << endl;
+      //uintmax_t size_img = fs::file_size(renderStack[index].path + "output" + to_string(adjFrameNumber) + "." + renderStack[index].dataType);
+      //put on the thread_poo
+      //Mat * fg = malloc(size_img);
+      //Read the file
+      //fg = imread( renderStack[index].path + "output" + to_string(adjFrameNumber) + "." + renderStack[index].dataType, IMREAD_UNCHANGED);//Read the image
+
+      //##############################################################################################################################
+      //This needs to become a shiba image
+      Mat * fg = new Mat(imread(renderStack[index].path + "output" + to_string(adjFrameNumber) + "." + renderStack[index].dataType, IMREAD_UNCHANGED));
+      //##############################################################################################################################
 
       //Check that the file is read successfully
-      if(fg.empty()){
+      if(fg->empty()){
          cout << "Error opening foreground file" << endl;
          cout <<  renderStack[index].path + "output" + to_string(adjFrameNumber) + ".png" << endl;
       }
       //cout << "made it to location 3!" << endl;
       ////Initialize a Mat object with 3 channels and width, height
       //cv::Mat img_C3( x, y, CV_8UC3, CV_RGB(1,1,1) );
+
+      //##############################################################################################################################
+      //This needs to fundamentally change logic to accomodate the shiba image
       Scalar_<uint8_t> bg_bgr;
       Scalar_<uint8_t> fg_bgr;
 
@@ -388,8 +375,8 @@ void superimpose(int frameNumber, vector<vizModule> vizModules, Mat bck, int fra
       //Still need logic to control the positions of the vizModule
       for (int v_index = bounds[0]; v_index < bounds[1]; v_index++){
         for (int h_index = bounds[2]; h_index < bounds[3]; h_index++){
-          //cout << "stack number " << index << " vstart " << bounds[0] << " vend " << bounds[1] << " hstart " << bounds[2] << " hend " << bounds[3] << endl;
-          //cout << "vindex " << v_index << " hindex " << h_index  << "fg rows" << fg->rows << " fg cols " << fg->cols  << " number of channels " << fg->channels() <<   endl;
+          cout << "stack number " << index << " vstart " << bounds[0] << " vend " << bounds[1] << " hstart " << bounds[2] << " hend " << bounds[3] << endl;
+          cout << "vindex " << v_index << " hindex " << h_index  << "fg rows" << fg->rows << " fg cols " << fg->cols  << " number of channels " << fg->channels() <<   endl;
           //Execute only if the foreground alpha channel (4th inde x starting at 1) is greater than 0
           //Access the first pixel [0][0], 4th channel [3] from cv::Mat object
           //This implementation of alpha mixing might not be right btw
@@ -397,14 +384,14 @@ void superimpose(int frameNumber, vector<vizModule> vizModules, Mat bck, int fra
           //Error here in this code
           Vec4b fg_channels;
           Vec3b temp;
+          cout << type2str(fg->type()) << endl;
           int fg_y = v_index - bounds[0];
           int fg_x = h_index - bounds[2];
-          //cout << type2str(fg->type()) << endl;
-          if (type2str(fg.type()) == "8UC4"){
-            fg_channels = fg.at<Vec4b>(fg_y, fg_x);
-          } else if (type2str(fg.type()) == "8UC3")
+          if (type2str(fg->type()) == "8UC4"){
+            fg_channels = fg->at<Vec4b>(fg_x, bg_y);
+          } else if (type2str(fg->type()) == "8UC3")
           {
-            temp = fg.at<Vec3b>(v_index,h_index);
+            temp = fg->at<Vec3b>(v_index,h_index);
             fg_channels = Vec4b(temp.val[0], temp.val[1], temp.val[2], 255);
           }
           if (fg_channels.val[3] > 0) //If the foreground's alpha channel is greater than 0
@@ -428,7 +415,7 @@ void superimpose(int frameNumber, vector<vizModule> vizModules, Mat bck, int fra
         }
       }
       //clean up heap
-      //delete fg;
+      delete fg;
 
     }
     //outside of the for loop which iterates through every active frame in the renderStack
@@ -477,7 +464,11 @@ void vCanvas::renderCanvas(){
   //include the logic for renaming arbitrarily named files into something standardized
   //within this conversion process, so that no more work has to be done in this function
   //before pushing files to the pool for superimposition
+
+  //##############################################################################################################################
+  //This needs to be come a shiba image
   Mat bg(height, width, CV_8UC4, backgroundRGBA); //Third argument is supposed to be an 8bit length 4 Scalar
+  //##############################################################################################################################
 
   //This forloop checks out 1 frame at a time. Hopefully, don't worry about race conditions
   //After this point, vizModules is not modified, and each thread individually
@@ -496,6 +487,7 @@ void vCanvas::renderCanvas(){
 
   }
 }
+
 /*
 //does not push the render through the thread pool for better debugging
 void vCanvas::renderCanvas_1T(){
