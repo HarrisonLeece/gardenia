@@ -33,6 +33,8 @@ class vizModule{
 
     string units = "frames";
 
+    bool still_image = false; 
+
     //////Timiing features
     int delay = 0; //0 = no delay to start rendering the module
     int cycles = 0; //1 = render this module once, do not repeat. 0=repeat until all other streams have terminated

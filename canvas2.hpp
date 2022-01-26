@@ -312,10 +312,10 @@ string type2str(int type) {
 
 //This function cannot be a class member function
 //Therefore pass a million arguments to it.  Optional last arg , synced_stream output
-void superimpose(int frameNumber, vector<vizModule> vizModules, Mat bckg, int frameRate)
+void superimpose(int frameNumber_in, vector<vizModule> vizModules, Mat bckg, int frameRate)
 {
   try {
-
+    int frameNumber = frameNumber_in;
     vector<vizModule> renderStack; //the set of ordered vizModules sent to the render pipeline
     //Control which vizModules enter the render stack for this frame
     for (int i = 0; i < vizModules.size(); i++) {
@@ -330,7 +330,10 @@ void superimpose(int frameNumber, vector<vizModule> vizModules, Mat bckg, int fr
     //The canvas itself is used as avirtual background of user set (default black) colored pixels
     for (int index=0; index < renderStack.size(); index++)
     {
-
+      frameNumber = frameNumber_in; // reset frame number because it might have been changed earlier
+      if (renderStack[index].still_image == true){
+        frameNumber = 0;
+      }
       int adjFrameNumber = frameNumber;
       if (!fs::exists(renderStack[index].path + "output" + to_string(frameNumber) + "." + renderStack[index].dataType))
       {
@@ -351,7 +354,6 @@ void superimpose(int frameNumber, vector<vizModule> vizModules, Mat bckg, int fr
       //fg = imread( renderStack[index].path + "output" + to_string(adjFrameNumber) + "." + renderStack[index].dataType, IMREAD_UNCHANGED);//Read the image
 
       //##############################################################################################################################
-      //This needs to become a shiba image
       Mat * fg = new Mat(imread(renderStack[index].path + "output" + to_string(adjFrameNumber) + "." + renderStack[index].dataType, IMREAD_UNCHANGED));
       //##############################################################################################################################
 
@@ -365,7 +367,6 @@ void superimpose(int frameNumber, vector<vizModule> vizModules, Mat bckg, int fr
       //cv::Mat img_C3( x, y, CV_8UC3, CV_RGB(1,1,1) );
 
       //##############################################################################################################################
-      //This needs to fundamentally change logic to accomodate the shiba image
       Scalar_<uint8_t> bg_bgr;
       Scalar_<uint8_t> fg_bgr;
 
